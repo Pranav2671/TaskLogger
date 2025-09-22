@@ -1,10 +1,12 @@
-﻿using Microsoft.Data.Sqlite;
+﻿using System;
+using System.Data.SQLite;
 
 namespace CrudWithSQLite
 {
     class Program
     {
-        static string connectionString = "Data Source=tasks.db;";
+        const string DatabaseName = "TaskLog.db";
+        static readonly string connectionString = $"Data Source={DatabaseName};";
 
         static void Main(string[] args)
         {
@@ -17,7 +19,8 @@ namespace CrudWithSQLite
                 Console.WriteLine("2. View Tasks");
                 Console.WriteLine("3. Update Task");
                 Console.WriteLine("4. Delete Task");
-                Console.WriteLine("5. Exit");
+                Console.WriteLine("5. Search Task by Date");
+                Console.WriteLine("6. Exit");
                 Console.Write("Enter choice: ");
 
                 string choice = Console.ReadLine();
@@ -27,59 +30,64 @@ namespace CrudWithSQLite
                     case "2": ViewTasks(); break;
                     case "3": UpdateTask(); break;
                     case "4": DeleteTask(); break;
-                    case "5": return; // Exit program
+                    case "5": SearchTaskByDate(); break;
+                    case "6": return; // Exit
                     default: Console.WriteLine("Invalid choice!"); break;
                 }
             }
         }
 
-        // Create Database and Table if not exists
         static void CreateDatabaseAndTable()
         {
-            using (var conn = new SqliteConnection(connectionString))
+            using (var conn = new SQLiteConnection(connectionString))
             {
                 conn.Open();
                 string tableCmd = @"CREATE TABLE IF NOT EXISTS TaskLog (
                                         Id INTEGER PRIMARY KEY AUTOINCREMENT,
                                         Description TEXT NOT NULL,
-                                        CreatedAt TEXT NOT NULL
+                                        DateDone TEXT NOT NULL,
+                                        HoursTaken REAL NOT NULL
                                     );";
-                using (var cmd = new SqliteCommand(tableCmd, conn))
+                using (var cmd = new SQLiteCommand(tableCmd, conn))
                 {
                     cmd.ExecuteNonQuery();
                 }
             }
         }
 
-        // CREATE
         static void AddTask()
         {
             Console.Write("Enter task description: ");
             string description = Console.ReadLine();
-            string createdAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
-            using (var conn = new SqliteConnection(connectionString))
+            Console.Write("Enter date done (dd/MM/yyyy): ");
+            string dateDone = Console.ReadLine();
+
+            Console.Write("Enter hours taken: ");
+            double hoursTaken = Convert.ToDouble(Console.ReadLine());
+
+            using (var conn = new SQLiteConnection(connectionString))
             {
                 conn.Open();
-                string insertCmd = "INSERT INTO TaskLog (Description, CreatedAt) VALUES (@desc, @createdAt)";
-                using (var cmd = new SqliteCommand(insertCmd, conn))
+                string insertCmd = "INSERT INTO TaskLog (Description, DateDone, HoursTaken) VALUES (@desc, @dateDone, @hoursTaken)";
+                using (var cmd = new SQLiteCommand(insertCmd, conn))
                 {
                     cmd.Parameters.AddWithValue("@desc", description);
-                    cmd.Parameters.AddWithValue("@createdAt", createdAt);
+                    cmd.Parameters.AddWithValue("@dateDone", dateDone);
+                    cmd.Parameters.AddWithValue("@hoursTaken", hoursTaken);
                     cmd.ExecuteNonQuery();
                 }
             }
             Console.WriteLine("Task added successfully!");
         }
 
-        // READ
         static void ViewTasks()
         {
-            using (var conn = new SqliteConnection(connectionString))
+            using (var conn = new SQLiteConnection(connectionString))
             {
                 conn.Open();
                 string selectCmd = "SELECT * FROM TaskLog";
-                using (var cmd = new SqliteCommand(selectCmd, conn))
+                using (var cmd = new SQLiteCommand(selectCmd, conn))
                 using (var reader = cmd.ExecuteReader())
                 {
                     Console.WriteLine("\n--- Task List ---");
@@ -91,13 +99,12 @@ namespace CrudWithSQLite
 
                     while (reader.Read())
                     {
-                        Console.WriteLine($"{reader["Id"]}. {reader["Description"]} (Created At: {reader["CreatedAt"]})");
+                        Console.WriteLine($"{reader["Id"]}. {reader["Description"]} (Date Done: {reader["DateDone"]}, Hours Taken: {reader["HoursTaken"]})");
                     }
                 }
             }
         }
 
-        // UPDATE
         static void UpdateTask()
         {
             ViewTasks();
@@ -107,13 +114,21 @@ namespace CrudWithSQLite
             Console.Write("Enter new task description: ");
             string newDesc = Console.ReadLine();
 
-            using (var conn = new SqliteConnection(connectionString))
+            Console.Write("Enter new date done (dd/MM/yyyy): ");
+            string newDateDone = Console.ReadLine();
+
+            Console.Write("Enter new hours taken: ");
+            double newHoursTaken = Convert.ToDouble(Console.ReadLine());
+
+            using (var conn = new SQLiteConnection(connectionString))
             {
                 conn.Open();
-                string updateCmd = "UPDATE TaskLog SET Description = @desc WHERE Id = @id";
-                using (var cmd = new SqliteCommand(updateCmd, conn))
+                string updateCmd = "UPDATE TaskLog SET Description = @desc, DateDone = @dateDone, HoursTaken = @hoursTaken WHERE Id = @id";
+                using (var cmd = new SQLiteCommand(updateCmd, conn))
                 {
                     cmd.Parameters.AddWithValue("@desc", newDesc);
+                    cmd.Parameters.AddWithValue("@dateDone", newDateDone);
+                    cmd.Parameters.AddWithValue("@hoursTaken", newHoursTaken);
                     cmd.Parameters.AddWithValue("@id", id);
                     int rows = cmd.ExecuteNonQuery();
 
@@ -125,18 +140,17 @@ namespace CrudWithSQLite
             }
         }
 
-        // DELETE
         static void DeleteTask()
         {
             ViewTasks();
             Console.Write("Enter task ID to delete: ");
             int id = Convert.ToInt32(Console.ReadLine());
 
-            using (var conn = new SqliteConnection(connectionString))
+            using (var conn = new SQLiteConnection(connectionString))
             {
                 conn.Open();
                 string deleteCmd = "DELETE FROM TaskLog WHERE Id = @id";
-                using (var cmd = new SqliteCommand(deleteCmd, conn))
+                using (var cmd = new SQLiteCommand(deleteCmd, conn))
                 {
                     cmd.Parameters.AddWithValue("@id", id);
                     int rows = cmd.ExecuteNonQuery();
@@ -145,6 +159,36 @@ namespace CrudWithSQLite
                         Console.WriteLine("Task deleted successfully!");
                     else
                         Console.WriteLine("Invalid ID. No task deleted.");
+                }
+            }
+        }
+
+        static void SearchTaskByDate()
+        {
+            Console.Write("Enter date to search (dd/MM/yyyy): ");
+            string searchDate = Console.ReadLine();
+
+            using (var conn = new SQLiteConnection(connectionString))
+            {
+                conn.Open();
+                string searchCmd = "SELECT * FROM TaskLog WHERE DateDone = @dateDone";
+                using (var cmd = new SQLiteCommand(searchCmd, conn))
+                {
+                    cmd.Parameters.AddWithValue("@dateDone", searchDate);
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        Console.WriteLine($"\n--- Tasks done on {searchDate} ---");
+                        if (!reader.HasRows)
+                        {
+                            Console.WriteLine("No tasks found for this date.");
+                            return;
+                        }
+
+                        while (reader.Read())
+                        {
+                            Console.WriteLine($"{reader["Id"]}. {reader["Description"]} (Hours Taken: {reader["HoursTaken"]})");
+                        }
+                    }
                 }
             }
         }
